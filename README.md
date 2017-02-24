@@ -1,2 +1,0 @@
-# crawler
-Crawler in Perl
