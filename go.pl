@@ -156,11 +156,11 @@ sub page { #_{
   for my $link (@{$g_page_info{a}}) {
      printf("  %-5s %-30s %4d %-50s %-20s %s\n", 
        $link->{dest}->{scheme} // 'n/a',
-       $link->{dest}->{host  }, 
-       $link->{dest}->{port  }, 
-       $link->{dest}->{path  }, 
+       $link->{dest}->{host  } // 'n/a', 
+       $link->{dest}->{port  } //    0 , 
+       $link->{dest}->{path  } // 'n/a', 
        $link->{dest}->{query } // '',
-       $link->{text}
+       $link->{text}           // 'n/a'
      );
   }
 
@@ -197,31 +197,30 @@ sub show_http_headers { #_{
 
 sub hp_text { #_{
     my ($text) = @_;
-    $text =~ s/\n//g;
+    $text =~ s/\s+/ /g;
+
 
     if ($g_page_info{in_title}) {
-      $g_page_info{title} .= $text;
+      string_append($g_page_info{title}, $text);
     }
     elsif ($g_page_info{cur_a}) {
-      $g_page_info{cur_a}{text} .= $text;
+      string_append($g_page_info{cur_a}{text}, $text);
     }
     else {
 
       if ($text =~ /(\w+str(?:asse|\.))\s+(\w*\d\w*)/) {
         print "Strasse: $1 $2\n";
-#       print "Strasse: $text\n";
       }
       if ($text =~ /\b(\d\d\d\d)\s+(\w+)/) {
-#       print "Ort: $1 $2\n";
-        print "Ort: $text\n";
+        if ($text !~ /([Ss]eit|[vV]on|[Cc]opyright) \d\d\d\d/) { 
+          print "Ort: $text\n";
+        }
       }
       if ($text =~ /\b(\d\d\d \d\d\d \d\d \d\d)/) {
         print "Tel: $1\n";
-#       print "Tel: $text\n";
       }
       if ($text =~ /(\+\d\d \d\d \d\d\d \d\d \d\d)/) {
         print "Tel: $1\n";
-#       print "Tel: $text\n";
       }
       if ($text =~ /(\S+\@\S+\.\S+)/) {
         print "Email: $1\n";
@@ -285,15 +284,28 @@ sub hp_start_tag { #_{
 
       my $dest_uri = URI->new($dest);
 
-      $g_page_info{cur_a} = {# dest=>$dest,
-                             dest => {
-                               scheme => $dest_uri->scheme,
-                               host   => $dest_uri->host  ,
-                               port   => $dest_uri->port  ,
-                               path   => $dest_uri->path  ,
-                               query  => $dest_uri->query 
-                             },
-                             text=>''};
+      my $scheme = $dest->scheme;
+
+      if ($scheme eq 'mailto') {
+
+        print "<a mailto: " . $dest->to . "\n";
+
+      }
+      elsif ($scheme eq 'javascript') {
+         print "javascript $attr->{href}\n";
+      }
+      else {
+
+        $g_page_info{cur_a} = {# dest=>$dest,
+                               dest => {
+                                 scheme => $scheme,
+                                 host   => $dest_uri->host  ,
+                                 port   => $dest_uri->port  ,
+                                 path   => $dest_uri->path  ,
+                                 query  => $dest_uri->query 
+                               },
+                               text=>''};
+      }
 
     } #_}
     elsif ($tag eq 'title') { #_{
@@ -340,3 +352,12 @@ sub hp_declaration { #_{
 } #_}
 
 #_}
+
+sub string_append { #_{
+  if ($_[0]) {
+    $_[0] .= " $_[1]"; 
+  }
+  else {
+    $_[0] = $_[1];
+  }
+} #_}
