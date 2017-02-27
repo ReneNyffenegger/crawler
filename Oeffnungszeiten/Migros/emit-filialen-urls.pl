@@ -59,8 +59,8 @@ sub char_data {
 
     $data =~ s/{amp}/&/;
    (my $id = $data) =~ s|.*/||;
-#   print $dl_url_h "     $data -O $ENV{digitales_backup}crawler/Oeffnungszeiten/Coop/wgetted/$i.html  \\\n";
-    print $dl_url_h "     $data -O                                                    wgetted/$id.html \\\n";
+    print $dl_url_h "     $data -O $ENV{digitales_backup}crawler/Oeffnungszeiten/Migros/wgetted/$id.html \\\n";
+#   print $dl_url_h "     $data -O                                                      wgetted/$id.html \\\n";
   }
 
 # print "character data:\n";
