@@ -7,6 +7,8 @@ use utf8;
 use HTML::Parser;
 use Encode qw(decode encode);
 
+binmode (STDOUT, ':utf8');
+
 # Variablen #_{
 my $in_title = 0;
 #my $migros_follows_opening_hours = 0;
@@ -67,9 +69,11 @@ sub create_html { #_{
     if ($migros_coop_etc eq 'Migros' or $migros_coop_etc eq 'Coop') {
       $html_parser->parse_file($file) or die;
     }
+    elsif ($migros_coop_etc eq 'Post') {
+      parse_post($file);
+    }
     else {
       parse_denner($file);
-
     }
     next unless length($title) > 4;
   
@@ -89,12 +93,29 @@ sub create_html { #_{
 
     }
 
-    if ($migros_coop_etc eq 'Migros' or $migros_coop_etc eq 'Denner') { #_{
+    my $td_tel_fax = '';
+
+    if ($migros_coop_etc ne 'Post') {
+      $td_tel_fax = "
+        <td>
+          <table border=0>
+            <tr><td>Tel:</td><td>$telephone</td></tr>
+            $tr_fax
+          </table>
+        </td>
+      ";
+    }
+
+#   if ($migros_coop_etc eq 'Post') {
+#       $zeiten{Fr} = $zeiten{Th} = $zeiten{We} =  $zeiten{Tu} = $zeiten{Mo};
+#   }
+    if ($migros_coop_etc eq 'Migros' or $migros_coop_etc eq 'Denner' or $migros_coop_etc eq 'Post') { #_{
       for my $k (keys %WT2WD) {
 
         $zeiten{$WT2WD{$k}} = 'geschlossen' unless $zeiten{$WT2WD{$k}};
       }
     } #_}
+
 
     my $td_file='';
 #   $td_file = "<td>$file</td>";
@@ -120,12 +141,8 @@ sub create_html { #_{
   
       </td>
           
-      <td>
-        <table border=0>
-          <tr><td>Tel:</td><td>$telephone</td></tr>
-          $tr_fax
-        </table>
-      </td>
+      $td_tel_fax
+
       $td_geschf
     </tr>";
   
@@ -133,7 +150,7 @@ sub create_html { #_{
   } #_}
   
   
-  print $out "</table><body></html>";
+  print $out "</table></body></html>";
   close $out;
 
 } #_}
@@ -326,6 +343,196 @@ sub parse_denner { #_{
 
   } #_}
 
+
+  close $file_h;
+
+} #_}
+
+sub parse_post { #_{
+  my $filename = shift;
+  open (my $file_h, '<:encoding(utf-8)', $filename) or die;
+
+  my $in_standort = 0;
+# my $in_zeiten   = 0;
+  my $normalschalter = 0;
+  my @apply_to_days = ();
+  while (my $line = <$file_h>) { #_{
+
+    chomp $line;
+    $line =~ s/\x{0d}//g;
+    $line =~ s/\x{09}/ /g;
+
+    if ($line =~ m|<h1>(.*)</h1>|) { #_{
+      $title = $1;
+      next;
+    } #_}
+
+    if ($line =~ m|<h2>Standort</h2>|) { #_{
+
+      $in_standort = 1;
+      next;
+    } #_}
+    if ($in_standort == 1) { #_{
+
+      die unless $line =~ m|<p>(.*)</p>|;
+
+      $strasse = $1;
+
+      $in_standort = 2;
+      next;
+    } #_}
+    if ($in_standort == 2) { #_{
+      die unless $line =~ m|<p>(\d{4}) (.*)</p>|;
+      $plz = $1;
+      $ort = $2;
+      $in_standort = 0;
+
+      next;
+    } #_}
+    if ($line =~ m|<h4>Normalschalter</h4>|) { #_{
+
+      $normalschalter = 1;
+      next;
+
+    } #_}
+    if ($normalschalter) { #_{
+
+      if ($line =~ m|Montag – Freitag</dt>|) { #_{
+        @apply_to_days = qw(Mo Tu We Th Fr);
+        next;
+      } #_}
+      if ($line =~ m|>Montag – Mittwoch</dt>|) { #_{
+        @apply_to_days = qw(Mo Tu We);
+         next;
+       } #_}
+      if ($line =~ m|>Montag – Donnerstag</dt>|) { #_{
+        @apply_to_days = qw(Mo Tu We Th);
+         next;
+       } #_}
+      if ($line =~ m|>Montag – Samstag</dt>|) { #_{
+         @apply_to_days = qw(Mo Tu We Th Fr Sa);
+         next;
+       } #_}
+      if ($line =~ m|>Dienstag – Donnerstag</dt>|) { #_{
+        @apply_to_days = qw(Tu We Th);
+         next;
+       } #_}
+      if ($line =~ m|>Dienstag – Freitag</dt>|) { #_{
+        @apply_to_days = qw(Tu We Th Fr);
+         next;
+       } #_}
+      if ($line =~ m|>Dienstag – Samstag</dt>|) { #_{
+        @apply_to_days = qw(Tu We Th Fr Sa);
+         next;
+       } #_}
+      if ($line =~ m|>Mittwoch – Freitag</dt>|) { #_{
+        @apply_to_days = qw(We Th Fr);
+         next;
+       } #_}
+      if ($line =~ m|>Mittwoch – Samstag</dt>|) { #_{
+        @apply_to_days = qw(We Th Fr Sa);
+         next;
+       } #_}
+      if ($line =~ m|>Donnerstag – Samstag</dt>|) { #_{
+        @apply_to_days = qw(Th Fr Sa);
+         next;
+       } #_}
+      if ($line =~ m|>Montag, Dienstag</dt>|) { #_{
+         @apply_to_days = qw(Mo Tu);
+         next;
+       } #_}
+      if ($line =~ m|>Montag, Dienstag, Donnerstag</dt>|) { #_{
+         @apply_to_days = qw(Mo Tu Th);
+         next;
+       } #_}
+      if ($line =~ m|>Montag, Dienstag, Donnerstag, Freitag</dt>|) { #_{
+         @apply_to_days = qw(Mo Tu Th Fr);
+         next;
+       } #_}
+      if ($line =~ m|>Dienstag, Mittwoch</dt>|) { #_{
+         @apply_to_days = qw(Tu We);
+         next;
+       } #_}
+      if ($line =~ m|>Dienstag, Donnerstag, Freitag</dt>|) { #_{
+         @apply_to_days = qw(Tu Th Fr);
+         next;
+       } #_}
+      if ($line =~ m|>Mittwoch, Donnerstag</dt>|) { #_{
+         @apply_to_days = qw(We Th);
+         next;
+       } #_}
+      if ($line =~ m|>Mittwoch, Freitag</dt>|) { #_{
+         @apply_to_days = qw(We Fr);
+         next;
+       } #_}
+      if ($line =~ m|>Freitag, Samstag</dt>|) { #_{
+         @apply_to_days = qw(Fr Sa);
+         next;
+       } #_}
+      if ($line =~ m|>Donnerstag, Freitag</dt>|) { #_{
+         @apply_to_days = qw(Th Fr);
+         next;
+       } #_}
+      if ($line =~ m|>Montag</dt>|) { #_{
+         @apply_to_days = qw(Mo);
+         next;
+       } #_}
+      if ($line =~ m|>Dienstag</dt>|) { #_{
+         @apply_to_days = qw(Mo);
+         next;
+       } #_}
+      if ($line =~ m|>Mittwoch</dt>|) { #_{
+        @apply_to_days = qw(We);
+         next;
+       } #_}
+      if ($line =~ m|>Donnerstag</dt>|) { #_{
+        @apply_to_days = qw(Th);
+         next;
+       } #_}
+      if ($line =~ m|>Freitag</dt>|) { #_{
+        @apply_to_days = qw(Sa);
+#        $in_zeiten = 'montag_donnerstag';
+         next;
+       } #_}
+      if ($line =~ m|>Samstag</dt>|) { #_{
+        @apply_to_days = qw(Sa);
+#        $in_zeiten = 'montag_donnerstag';
+         next;
+       } #_}
+      if ($line =~ m|Sonntag</dt>|) { #_{
+        @apply_to_days = qw(So);
+         next;
+       } #_}
+      if ($line =~ /(\d\d\.\d\d) – (\d\d\.\d\d)/) { #_{
+
+         for my $wd (@apply_to_days) { #_{
+           if ($zeiten{$wd}) {
+             if ($zeiten{$wd} =~ m|/|) { # At most one seperator!
+               next;
+              }
+              $zeiten{$wd} .= ' / ' if $zeiten{$wd};
+           }
+
+           $zeiten{$wd} .= "$1 - $2";
+         } #_}
+
+         next;
+       } #_}
+
+      if ($line =~ m|</div>|) { #_{
+        $normalschalter = 0;
+        next;
+      } #_}
+
+      next if $line =~ m|<dt class="date-range-heading|;
+      next if $line =~ m|^ *</dl> *$|;
+
+      die $line;
+    } #_}
+
+
+
+  } #_}
 
   close $file_h;
 
