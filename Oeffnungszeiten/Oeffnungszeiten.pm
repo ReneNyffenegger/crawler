@@ -6,20 +6,21 @@ use warnings;
 use utf8;
 use HTML::Parser;
 use Encode qw(decode encode);
+use JSON;
 
 binmode (STDOUT, ':utf8');
 
 # Variablen #_{
 my $in_title = 0;
 #my $migros_follows_opening_hours = 0;
-my $title ='';
-my $strasse = '';
-my $plz = '';
-my $ort = '';
-my $telephone = '';
-my $fax = '';
-my $geschf = '';  # Nur Coop?
-my %zeiten;
+our $title ='';
+our $strasse = '';
+our $plz = '';
+our $ort = '';
+our $telephone = '';
+our $fax = '';
+our $geschf = '';  # Nur Coop?
+our %zeiten;
 # my $wochentag = '';
 my $weekday ='';
 
@@ -46,13 +47,16 @@ my $migros_coop_etc;
 sub create_html { #_{
 
   my $html_glob_expr    = shift;
-     $migros_coop_etc    = shift;
+     $migros_coop_etc   = shift;
+
+  my $parse_file_func   = shift;
 
   my $out = open_html();
+
   
   for my $file (glob $html_glob_expr) { #_{
 
-    print "$file\n";
+#   print "$file\n";
   
     $g{itemprop} = '';
     $g{datetime} = '';
@@ -71,6 +75,9 @@ sub create_html { #_{
     }
     elsif ($migros_coop_etc eq 'Post') {
       parse_post($file);
+    }
+    elsif ($migros_coop_etc eq 'UBS') {
+      &$parse_file_func($file);
     }
     else {
       parse_denner($file);
@@ -150,7 +157,13 @@ sub create_html { #_{
   } #_}
   
   
-  print $out "</table></body></html>";
+  print $out "</table>
+
+  <hr>
+  <b>Disclaimer</b>: Natürlich sind diese Daten ohne Gewähr usw.
+  <br>
+  Sie wurden von <a href='/index.html'>mir (René Nyffenegger)</a>, vom Web »gescrapt«. <a href='/Kontakt.html'>Kontaktieren</a> Sie mich, wenn Sie einen professionellen und erfahrenen Webscraper benötigen!
+  </body></html>";
   close $out;
 
 } #_}
@@ -549,6 +562,7 @@ sub open_html { #_{
       tr { vertical-align: top}
       * { font-family: sans-serif}
     </style>
+
   </head><body>
   
   <a href='index.html'>Öffnungszeiten</a> von $migros_coop_etc
