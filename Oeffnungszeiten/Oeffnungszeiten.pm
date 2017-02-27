@@ -21,7 +21,10 @@ my %zeiten;
 # my $wochentag = '';
 my $weekday ='';
 
-my %wochentag2weekday = (So=>'Su', Mo=>'Mo', Di=>'Tu', Mi=>'We', Do=>'Th', Fr=>'Fr', Sa=>'Sa');
+my %WT2WD        = (So      =>'Su', Mo    =>'Mo', Di      =>'Tu', Mi      =>'We', Do        =>'Th', Fr     =>'Fr', Sa     =>'Sa');
+my %Wochentag2WD = (Sonntag =>'Su', Montag=>'Mo', Dienstag=>'Tu', Mittwoch=>'We', Donnerstag=>'Th', Freitag=>'Fr', Samstag=>'Sa');
+
+
 
 my @in_tags = qw(span tr td title p);
 
@@ -60,9 +63,14 @@ sub create_html { #_{
     $fax = '';
     $geschf = '';
     %zeiten = ();
-  
-    $html_parser->parse_file($file) or die;
-  
+
+    if ($migros_coop_etc eq 'Migros' or $migros_coop_etc eq 'Coop') {
+      $html_parser->parse_file($file) or die;
+    }
+    else {
+      parse_denner($file);
+
+    }
     next unless length($title) > 4;
   
     $telephone =~ s/^Tel\S* *//;
@@ -81,10 +89,10 @@ sub create_html { #_{
 
     }
 
-    if ($migros_coop_etc eq 'Migros') { #_{
-      for my $k (keys %wochentag2weekday) {
+    if ($migros_coop_etc eq 'Migros' or $migros_coop_etc eq 'Denner') { #_{
+      for my $k (keys %WT2WD) {
 
-        $zeiten{$wochentag2weekday{$k}} = 'geschlossen' unless $zeiten{$wochentag2weekday{$k}};
+        $zeiten{$WT2WD{$k}} = 'geschlossen' unless $zeiten{$WT2WD{$k}};
       }
     } #_}
 
@@ -169,7 +177,7 @@ sub hp_text { #_{
 
       if ($g{itemprop} eq 'dayOfWeek' and $migros_coop_etc eq 'Migros') {
         $text =~ s/ //g;
-        $weekday = $wochentag2weekday{$text};
+        $weekday = $WT2WD{$text};
       }
 
     }
@@ -249,6 +257,79 @@ sub hp_end_tag { #_{
 } #_}
 
 #_}
+
+sub parse_denner { #_{
+  my $filename = shift;
+
+# local $/ = chr(13).chr(10);
+
+  open (my $file_h, '<:encoding(utf-8)', $filename) or die;
+
+  my $in_oeffnungszeiten = 0;
+  my $next_WD = '';
+
+  while (my $line = <$file_h>) { #_{
+
+    chomp $line;
+    $line =~ s/\x{0d}//g;
+    $line =~ s/\x{09}/ /g;
+
+    $title     = $1 if $line =~ m|<span itemprop="name">(.*)</span>|;
+    $strasse   = $1 if $line =~ m|<span itemprop="streetAddress">(.*)</span>|;
+    $ort       = $1 if $line =~ m|<span itemprop="addressLocality">(.*)</span>|;
+    $plz       = $1 if $line =~ m|<span itemprop="postalCode">(.*)</span>|;
+    $telephone = $1 if $line =~ m|Tel\. (\d\d\d \d\d\d \d\d \d\d)|;
+
+
+    if ($line =~ m!<div class="itemtitle">Öffnungszeiten</div>!) {
+
+      $in_oeffnungszeiten = 1;
+      next;
+    }
+
+    $in_oeffnungszeiten = 0 if $line =~ m|</table>|;
+
+    if ($in_oeffnungszeiten) { #_{
+
+#     print "In Oeff: $line\n";
+
+        if ($next_WD) { #_{
+ 
+          if ($line =~ m|<td>(\d\d:\d\d - \d\d:\d\d) Uhr</td>|) {
+            
+              if ($zeiten{$next_WD}) {
+                $zeiten{$next_WD} .= ' / ';
+              }
+              $zeiten{$next_WD} .= $1;
+            
+              next;
+          };
+
+#         $next_WD = '';
+ 
+        } #_}
+
+        if ($line =~ m|<td>(.*)</td>|) { #_{
+
+          if (exists $Wochentag2WD{$1}) {
+            $next_WD = $Wochentag2WD{$1};
+#           print "Wochentag = $1, next_wochentag=$next_WD, line: $line\n";
+#           next
+          }
+
+#         die "line: $line\n\$1: $1\n" unless $next_WD;
+          next;
+
+      } #_}
+
+    } #_}
+
+  } #_}
+
+
+  close $file_h;
+
+} #_}
 
 sub open_html { #_{
   open (my $out, '>:encoding(utf-8)', "../$migros_coop_etc.html") or die;
