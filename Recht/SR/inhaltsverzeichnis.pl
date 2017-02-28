@@ -18,6 +18,7 @@ $/ = "\x0d\x0a";
 
 my $cur_tree;
 my %tree;
+my %id2name;
 descend_level('national.html', 0, \%tree);
 
 # print dump(%tree);
@@ -32,18 +33,19 @@ print $out "<!DOCTYPE html>
 
   <style>
 
-    div.l0 {
-      margin-left: 20px;
-    }
-    div.l1 {
-      margin-left: 20px;
-    }
-    div.l2 {
-      margin-left: 20px;
-    }
+    td.nr0 {padding-left: 10px}
+    td.nr1 {padding-left: 25px}
+    td.nr2 {padding-left: 40px}
+    td.nr3 {padding-left: 55px}
+
+    td.lvl0 {font-size: 30px}
+    td.lvl1 {font-size: 26px}
+    td.lvl2 {font-size: 22px}
+    td.lvl3 {font-size: 12px}
 
     .content {
-      display: none;
+//    display: none;
+      display: block
     }
 
 
@@ -53,6 +55,7 @@ print $out "<!DOCTYPE html>
   <script>
 
     function show_hide(id) {
+      return;
 //    alert(id);
       var elem = document.getElementById(id);
 //    alert(elem);
@@ -72,10 +75,11 @@ print $out "<!DOCTYPE html>
 <h1>Systematische Rechtssammlung - Inhaltsverzeichnis</h1>
 "; #_}
 
+print $out "<table>\n";
 for my $child_tree (@{$tree{children}}) {
-# print ref($child_tree), "\n";
   print_tree($child_tree);
 }
+print $out "</table>\n";
 
 
 print $out "</body></html>";
@@ -143,7 +147,13 @@ sub descend_level { #_{
            
         if ($line =~ m|^ *<a href='/opc/de/classified-compilation/([^']+)'>(.*)</a> *$|) { #_{
 
+          my $url = $1;
+
+          $tree->{url } = $url;
           $tree->{name} = $2;
+
+          die unless $url =~ m!^([^/])+/index.html!;
+          download_file_if_not_exists($url);
              
 
         } #_}
@@ -151,15 +161,22 @@ sub descend_level { #_{
 
           $tree->{name} = $line;
 
+
           while (1) { #_{
 
             $line = <$fh>; chomp ($line); die "$. $line" unless $line =~ m|^ *→ *$|;
             $line = <$fh>; chomp ($line); die $line unless $line =~ m|^ *<a href='/opc/de/classified-compilation/(\d[\d.]).html#([^']+)'>\2</a> *$|;
+            my $id = $2;
+#           print "id: $id\n";
 
             $line = <$fh>; chomp ($line);
-            die $line unless $line =~ s!(</td>|<br/>) *$!!;
-
+            die $line unless $line =~ s! *(</td>|<br/>) *$!!;
             my $td_br = $1;
+
+            $line =~ s/^ *//;
+            my $target = $line;
+#           print "target: $id -> $target\n";
+            push @{$tree->{targets}}, {id=>$id, target=>$target};
 
             last if $td_br eq '</td>';
             $line = <$fh>; chomp ($line); die unless $line =~ m|^ *$|;
@@ -183,10 +200,18 @@ sub descend_level { #_{
 sub download_file_if_not_exists { #_{
   my $filename = shift;
 
-  return if -e "${download_dir}$filename";
+  my $filename_local  = $filename;
+  my $filename_remote = $filename;
+
+  if ($filename =~ m!(.*)/index.html!) {
+
+    $filename_local = "$1.html";
+  }
+
+  return if -e "${download_dir}$filename_local";
 
   print "Downloading $filename\n";
-  getstore("${download_from_url}$filename", "${download_dir}$filename") or die "could not download $filename";
+  getstore("${download_from_url}$filename_remote", "${download_dir}$filename_local") or die "could not download $filename_remote";
 
 } #_}
 
@@ -221,19 +246,6 @@ sub kategorie { #_{
 
   return;
 
-  my $indent = "  " x $level;
-
-
-  my $id="kat_kont_$nr";
-
-  print $out "$indent<div class='l$level'><!-- { -->\n";
-  print $out "$indent  <div class='head'>$nr: <a href='javascript:show_hide(\"$id\");'>$name</a></div>\n";
-  print $out "$indent  <div class='content' id='$id'><!-- { -->\n";
-
-  descend_level("$1.html", $level+1) if $level < 2;
-
-  print $out "$indent  </div><!-- } -->\n";
-  print $out "$indent</div><!-- } -->\n";
 
 } #_}
 
@@ -246,28 +258,64 @@ sub print_tree { #_{
 
   my $indent = "  " x $level;
 
+  my $name_td = $name;
+  if (exists $parent_tree->{url}) {
+    $name_td = "<a href='https://www.admin.ch/opc/de/classified-compilation/$parent_tree->{url}'>$name</a>";
+  }
 
+  my $targets = '';
+  if (exists $parent_tree->{targets}) {
+    for my $target (@{$parent_tree->{targets}}) {
 
-  my $id="kat_kont_$nr";
+      if ($targets) {
+        $targets .= ", ";
+      }
+      else {
+        $targets = " (";
+      }
+      $targets .= "<a href='#id_$target->{id}'>";
+      $targets .= $target->{id};
+      $targets .= "</a>";
+      if ($target->{target}) {
+        $targets .= " [$target->{target}]";
+      }
 
-  print $out "$indent<div class='l$level'><!-- { -->\n";
-
-  if (#$level < 2 and 
-    exists $parent_tree->{children}) {
-
-    print $out "$indent  <div class='head'>$nr: <a href='javascript:show_hide(\"$id\");'>$name</a></div>\n";
-    print $out "$indent  <div class='content' id='$id'><!-- { -->\n";
-    for my $child_tree (@{$parent_tree->{children}}) {
-      print_tree($child_tree);
     }
-    print $out "$indent  </div> <!-- } -->\n";
-  }
-  else {
-
-    print $out "$indent  <div class='head'>$nr: $name</div>\n";
+    $targets .= ")";
   }
 
-  print $out "$indent</div><!-- } -->\n";
+  print $out "<tr id='id_$nr'><td class='nr$level lvl$level'>$nr</td><td class='nm$level lvl$level'>$name_td$targets</td></tr>\n";
+
+  if (exists $parent_tree->{children}) {
+    for my $child_tree (@{$parent_tree->{children}}) {
+       print_tree($child_tree);
+    }
+  }
+
+
+
+
+# Show/Hide inhaltsverzeichnis
+# my $id="kat_kont_$nr";
+#
+# print $out "$indent<div class='l$level'><!-- { -->\n";
+#
+#
+# if (exists $parent_tree->{children}) {
+#
+#   print $out "$indent  <div class='head'>$nr: <a href='javascript:show_hide(\"$id\");'>$name</a></div>\n";
+#   print $out "$indent  <div class='content' id='$id'><!-- { -->\n";
+#   for my $child_tree (@{$parent_tree->{children}}) {
+#     print_tree($child_tree);
+#   }
+#   print $out "$indent  </div> <!-- } -->\n";
+# }
+# else {
+#
+#   print $out "$indent  <div class='head'>$nr: $name</div>\n";
+# }
+#
+# print $out "$indent</div><!-- } -->\n";
 
 } #_}
 
