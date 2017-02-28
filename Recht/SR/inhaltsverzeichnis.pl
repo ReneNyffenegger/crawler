@@ -23,7 +23,7 @@ descend_level('national.html', 0, \%tree);
 # print dump(%tree);
 
 
-open (my $out, '>:encoding(utf-8)', "$ENV{digitales_backup}crawler/Recht/SR/created/inhaltsverzeichnis.html"); #_{
+open (my $out, '>:encoding(utf-8)', "$ENV{digitales_backup}crawler/Recht/SR/created/index.html"); #_{
 print $out "<!DOCTYPE html>
 <head>
   <title>Systematische Rechtssammlung - Inhaltsverzeichnis</title>
