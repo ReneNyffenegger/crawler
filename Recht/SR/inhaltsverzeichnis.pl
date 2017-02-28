@@ -2,8 +2,12 @@
 use warnings;
 use strict;
 use feature 'say';
+# use Data::Dump qw(dump);
+
+binmode STDOUT, ':encoding(utf8)';
 
 use LWP::Simple;
+use utf8;
 
 my $download_dir      = "$ENV{digitales_backup}crawler/Recht/SR/downloaded/"; die unless -d $download_dir;
 my $download_from_url = 'https://www.admin.ch/opc/de/classified-compilation/';
@@ -12,8 +16,11 @@ $/ = "\x0d\x0a";
 
 
 
+my $cur_tree;
 my %tree;
 descend_level('national.html', 0, \%tree);
+
+# print dump(%tree);
 
 
 open (my $out, '>:encoding(utf-8)', "$ENV{digitales_backup}crawler/Recht/SR/created/inhaltsverzeichnis.html"); #_{
@@ -66,7 +73,7 @@ print $out "<!DOCTYPE html>
 "; #_}
 
 for my $child_tree (@{$tree{children}}) {
-  print ref($child_tree), "\n";
+# print ref($child_tree), "\n";
   print_tree($child_tree);
 }
 
@@ -81,13 +88,11 @@ sub descend_level { #_{
   my $level       = shift;
   my $parent_tree = shift;
 
-# my %tree;
 
   my $fh = open_downloaded_file($filename);
 
   my $level_2_has_ul = 0;
 
-  print "$level: $filename\n";
 
   while (my $line = <$fh>) { #_{
     chomp $line;
@@ -122,6 +127,50 @@ sub descend_level { #_{
         
 
       } #_}
+      if ($line =~ m|^ *<a name="([^"]+)"></a>(\S*)|) {
+
+        my $nr = $1;
+        die unless $1 eq $2;
+
+        my $tree = {
+          level => $cur_tree->{level}+1,
+          nr=>$nr,
+        };
+        my $line = <$fh>; chomp ($line); die unless $line =~ m|^ *</td> *$|;
+           $line = <$fh>; chomp ($line); die unless $line =~ m|^ *<td> *$|;
+           $line = <$fh>; chomp ($line); 
+
+           
+        if ($line =~ m|^ *<a href='/opc/de/classified-compilation/([^']+)'>(.*)</a> *$|) { #_{
+
+          $tree->{name} = $2;
+             
+
+        } #_}
+        else { #_{
+
+          $tree->{name} = $line;
+
+          while (1) { #_{
+
+            $line = <$fh>; chomp ($line); die "$. $line" unless $line =~ m|^ *→ *$|;
+            $line = <$fh>; chomp ($line); die $line unless $line =~ m|^ *<a href='/opc/de/classified-compilation/(\d[\d.]).html#([^']+)'>\2</a> *$|;
+
+            $line = <$fh>; chomp ($line);
+            die $line unless $line =~ s!(</td>|<br/>) *$!!;
+
+            my $td_br = $1;
+
+            last if $td_br eq '</td>';
+            $line = <$fh>; chomp ($line); die unless $line =~ m|^ *$|;
+          } #_}
+
+        } #_}
+
+        push @{$cur_tree->{children}}, $tree;
+
+
+      }
 
     } #_}
 
@@ -159,17 +208,16 @@ sub kategorie { #_{
   my $nr          = shift;
   my $name        = shift;
   my $parent_tree = shift;
-# my $tree        = shift;
 
 
-  my $tree = {};
+  $cur_tree = {};
 
-  $tree -> {nr   } = $nr;
-  $tree -> {level} = $level;
-  $tree -> {name } = $name;
+  $cur_tree -> {nr   } = $nr;
+  $cur_tree -> {level} = $level;
+  $cur_tree -> {name } = $name;
 
-  push @{$parent_tree -> {children}}, $tree;
-  descend_level("$1.html", $level+1, $tree) if $level < 2;
+  push @{$parent_tree -> {children}}, $cur_tree;
+  descend_level("$1.html", $level+1, $cur_tree) if $level < 2;
 
   return;
 
@@ -181,7 +229,6 @@ sub kategorie { #_{
   print $out "$indent<div class='l$level'><!-- { -->\n";
   print $out "$indent  <div class='head'>$nr: <a href='javascript:show_hide(\"$id\");'>$name</a></div>\n";
   print $out "$indent  <div class='content' id='$id'><!-- { -->\n";
-# print $out "$indent  <li><b>$1</b>: $2\n";
 
   descend_level("$1.html", $level+1) if $level < 2;
 
@@ -192,15 +239,6 @@ sub kategorie { #_{
 
 sub print_tree { #_{
   my $parent_tree = shift;
-
-# $tree -> {nr   } = $nr;
-# $tree -> {level} = $level;
-# $tree -> {name } = $name;
-
-# push @{$parent_tree -> {children}}, $tree;
-# descend_level("$1.html", $level+1, $tree) if $level < 2;
-
-# return;
 
   my $nr    = $parent_tree->{nr};
   my $level = $parent_tree->{level};
@@ -214,7 +252,8 @@ sub print_tree { #_{
 
   print $out "$indent<div class='l$level'><!-- { -->\n";
 
-  if ($level < 2 and exists $parent_tree->{children}) {
+  if (#$level < 2 and 
+    exists $parent_tree->{children}) {
 
     print $out "$indent  <div class='head'>$nr: <a href='javascript:show_hide(\"$id\");'>$name</a></div>\n";
     print $out "$indent  <div class='content' id='$id'><!-- { -->\n";
