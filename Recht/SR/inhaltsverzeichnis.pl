@@ -53,6 +53,9 @@ sub descend_level { #_{
 
       }
     } #_}
+    elsif ($level == 2) {
+#
+    }
 
   } #_}
   close $fh;
@@ -77,6 +80,9 @@ sub open_downloaded_file {
   download_file_if_not_exists($filename);
 
   open (my $fh, '<:encoding(utf-8)', "${download_dir}$filename") or die "could not open ${download_dir}$filename";
+
+  1 while <$fh> !~ m|<!-- begin: main -->|;
+
   $fh;
 
 }
