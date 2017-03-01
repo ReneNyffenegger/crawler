@@ -147,13 +147,14 @@ sub descend_level { #_{
            
         if ($line =~ m|^ *<a href='/opc/de/classified-compilation/([^']+)'>(.*)</a> *$|) { #_{
 
-          my $url = $1;
-
-          $tree->{url } = $url;
-          $tree->{name} = $2;
-
-          die unless $url =~ m!^([^/])+/index.html!;
-          download_file_if_not_exists($url);
+           my $url_ = $1;
+           $tree->{name} = $2;
+           download_file_if_not_exists($url_);
+ 
+           die unless $url_ =~ m!^([^/]+)/index.html!;
+           my $url = "$1.html";
+           $tree->{url} = $url;
+ 
              
 
         } #_}
@@ -260,7 +261,8 @@ sub print_tree { #_{
 
   my $name_td = $name;
   if (exists $parent_tree->{url}) {
-    $name_td = "<a href='https://www.admin.ch/opc/de/classified-compilation/$parent_tree->{url}'>$name</a>";
+#   $name_td = "<a href='https://www.admin.ch/opc/de/classified-compilation/$parent_tree->{url}'>$name</a>";
+    $name_td = "<a href='$parent_tree->{url}'>$name</a>";
   }
 
   my $targets = '';
