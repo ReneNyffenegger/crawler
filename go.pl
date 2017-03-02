@@ -7,18 +7,15 @@ use HTML::Parser;
 use Text::Wrap;
 use URI;
 
-
 my $url = shift;
 
-
-
-my $user_agent = LWP::UserAgent->new (
+my $user_agent = LWP::UserAgent->new ( #_{
   timeout         =>  10,
   agent           => 'TQ',
   default_headers =>  HTTP::Headers->new('Accept-Language'  => 'de; en; *'),
-);
+); #_}
 
-my $html_parser = HTML::Parser->new(
+my $html_parser = HTML::Parser->new( #_{
   start_h       => [\&hp_start_tag  , 'tag, attr, text'  ],
   end_h         => [\&hp_end_tag    , 'tag'              ],
   text_h        => [\&hp_text       , 'text'             ],
@@ -26,7 +23,7 @@ my $html_parser = HTML::Parser->new(
   default_h     => [\&hp_default    , 'text'             ],
   process_h     => [\&hp_process    , 'text'             ],
   declaration_h => [\&hp_declaration, 'text'             ],
-);
+); #_}
 
 $Text::Wrap::columns  = 120;
 $Text::Wrap::unexpand =   0;
@@ -122,7 +119,7 @@ sub matchUpToNLNL { #_{
 sub page { #_{
 
   my $scheme = shift;
-  my $host    = shift;
+  my $host   = shift;
   my $path   = shift;
 
   my $url  = "$scheme://$host$path";
@@ -145,16 +142,18 @@ sub page { #_{
   $html_parser->eof;
 
   print "\n\n";
-  printf "title:       %s\n", $g_page_info{title}             // 'n/a';
-  printf "language:    %s\n", $g_page_info{lang}              // 'n/a';
-  printf "charset:     %s\n", $g_page_info{meta}{charset    } // 'n/a';
-  printf "robots:      %s\n", $g_page_info{meta}{robots     } // 'n/a';
-  printf "generator:   %s\n", $g_page_info{meta}{generator  } // 'n/a';
+  printf "status:      %s\n", $http_response->status_line              ;
+  printf "server:      %s\n", $http_response->header('Server') // 'n/a';
+  printf "title:       %s\n", $g_page_info{title}              // 'n/a';
+  printf "language:    %s\n", $g_page_info{lang}               // 'n/a';
+  printf "charset:     %s\n", $g_page_info{meta}{charset    }  // 'n/a';
+  printf "robots:      %s\n", $g_page_info{meta}{robots     }  // 'n/a';
+  printf "generator:   %s\n", $g_page_info{meta}{generator  }  // 'n/a';
   printf "keywords:    %s\n", wrap('', '             ', $g_page_info{meta}{keywords   } // 'n/a');
-  printf "description: %s\n", $g_page_info{meta}{description} // 'n/a';
-
-  for my $link (@{$g_page_info{a}}) {
-     printf("  %-5s %-30s %4d %-50s %-20s %s\n", 
+  printf "description: %s\n", $g_page_info{meta}{description}  // 'n/a';
+  printf "declaration: %s\n", $g_page_info{declaration}        // 'n/a'; 
+  for my $link (@{$g_page_info{links}}) { #_{
+     printf("  %-5s %-30s %4d %-50s %-50s %s\n", 
        $link->{dest}->{scheme} // 'n/a',
        $link->{dest}->{host  } // 'n/a', 
        $link->{dest}->{port  } //    0 , 
@@ -162,7 +161,7 @@ sub page { #_{
        $link->{dest}->{query } // '',
        $link->{text}           // 'n/a'
      );
-  }
+  } #_}
 
   for my $todo (@{$g_page_info{TODO}}) {
     printf "TODO $todo\n";
@@ -333,7 +332,7 @@ sub hp_end_tag { #_{
       $g_page_info{in_title} = 0;
     }
     elsif ($tag eq '/a') {
-      push @{$g_page_info{a}}, $g_page_info{cur_a};
+      push @{$g_page_info{links}}, $g_page_info{cur_a};
       $g_page_info{cur_a} = undef;
     }
 
@@ -345,10 +344,18 @@ sub hp_default { #_{
 
 sub hp_process { #_{
     my ($text) = @_;
+#   print $text,"\n";
 } #_}
 
 sub hp_declaration { #_{
     my ($text) = @_;
+    
+    if (exists $g_page_info{declaration}) {
+       print "Warning, declaration already exists\n";
+    }
+    else {
+      $g_page_info{declaration} = $text;
+    }
 } #_}
 
 #_}
