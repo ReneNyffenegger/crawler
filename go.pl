@@ -13,6 +13,7 @@ my $user_agent = LWP::UserAgent->new ( #_{
   timeout         =>  10,
   agent           => 'TQ',
   default_headers =>  HTTP::Headers->new('Accept-Language'  => 'de; en; *'),
+  max_redirect    =>  0,
 ); #_}
 
 my $html_parser = HTML::Parser->new( #_{
@@ -131,9 +132,15 @@ sub page { #_{
   );
 
   my $content = $http_response->content;
-# show_http_headers($http_response->headers);
 
-# print $content;
+  if ($http_response->code == 301) {
+    printf "Moved Permanently to %s\n", $http_response->header('Location');
+    return;
+  }
+
+  show_http_headers($http_response->headers);
+
+# print "content: $content\n";
 
   %g_page_info = (
      url => $url
@@ -152,15 +159,23 @@ sub page { #_{
   printf "keywords:    %s\n", wrap('', '             ', $g_page_info{meta}{keywords   } // 'n/a');
   printf "description: %s\n", $g_page_info{meta}{description}  // 'n/a';
   printf "declaration: %s\n", $g_page_info{declaration}        // 'n/a'; 
+
+  print "<iframes>\n";
+  for my $link (@{$g_page_info{iframes}}) {
+    print_url($link->{dest});
+  }
+
+  print "links:\n";
   for my $link (@{$g_page_info{links}}) { #_{
-     printf("  %-5s %-30s %4d %-50s %-50s %s\n", 
-       $link->{dest}->{scheme} // 'n/a',
-       $link->{dest}->{host  } // 'n/a', 
-       $link->{dest}->{port  } //    0 , 
-       $link->{dest}->{path  } // 'n/a', 
-       $link->{dest}->{query } // '',
-       $link->{text}           // 'n/a'
-     );
+    print_url($link->{dest}, $link->{text});
+#    printf("  %-5s %-30s %4d %-50s %-50s %s\n", 
+#      $link->{dest}->{scheme} // 'n/a',
+#      $link->{dest}->{host  } // 'n/a', 
+#      $link->{dest}->{port  } //    0 , 
+#      $link->{dest}->{path  } // 'n/a', 
+#      $link->{dest}->{query } // '',
+#      $link->{text}           // 'n/a'
+#    );
   } #_}
 
   for my $todo (@{$g_page_info{TODO}}) {
@@ -182,6 +197,20 @@ sub robot_txt { #_{
 # print $http_response->content;
 
 } #_}
+
+sub print_url {
+  my $dest = shift;
+  my $text = shift;
+
+  printf("  %-5s %-30s %4d %-50s %-50s %s\n", 
+    $dest->{scheme} // 'n/a',
+    $dest->{host  } // 'n/a', 
+    $dest->{port  } //    0 , 
+    $dest->{path  } // 'n/a', 
+    $dest->{query } // '',
+    $text           // 'n/a'
+  );
+}
 
 sub show_http_headers { #_{
   my $http_headers = shift;
@@ -265,7 +294,7 @@ sub hp_start_tag { #_{
           # Skip
         }
         else {
-          push @{$g_page_info{TODO}}, "Unknown meta name $name ($content)";
+          push @{$g_page_info{TODO}}, "Unknown http-equiv $http_equiv ($content)";
         }
       } #_}
       elsif (my $charset = $attr->{charset}) {
@@ -277,7 +306,7 @@ sub hp_start_tag { #_{
 
 
     } #_}
-    elsif ($tag eq 'a'    ) { #_{
+    elsif ($tag eq 'a'     ) { #_{
 
       my $dest = URI->new_abs($attr->{href}, $g_page_info{url});
 
@@ -307,13 +336,43 @@ sub hp_start_tag { #_{
       }
 
     } #_}
-    elsif ($tag eq 'title') { #_{
+    elsif ($tag eq 'iframe') { #_{
+
+      my $dest = URI->new_abs($attr->{src}, $g_page_info{url});
+
+      my $dest_uri = URI->new($dest);
+
+      my $scheme = $dest->scheme;
+
+      if ($scheme eq 'mailto') {
+
+        print "<a mailto: " . $dest->to . "\n";
+
+      }
+      elsif ($scheme eq 'javascript') {
+         print "javascript $attr->{href}\n";
+      }
+      else {
+
+        $g_page_info{cur_iframe} = {
+                               dest => {
+                                 scheme => $scheme,
+                                 host   => $dest_uri->host  ,
+                                 port   => $dest_uri->port  ,
+                                 path   => $dest_uri->path  ,
+                                 query  => $dest_uri->query 
+                               },
+                               text=>''};
+      }
+
+    } #_}
+    elsif ($tag eq 'title' ) { #_{
 
       $g_page_info{in_title} = 1;
       $g_page_info{title} = '';
 
     } #_}
-    elsif ($tag eq 'html' ) { #_{
+    elsif ($tag eq 'html'  ) { #_{
 
       if (my $lang = $attr->{lang}) {
 
@@ -334,6 +393,10 @@ sub hp_end_tag { #_{
     elsif ($tag eq '/a') {
       push @{$g_page_info{links}}, $g_page_info{cur_a};
       $g_page_info{cur_a} = undef;
+    }
+    elsif ($tag eq '/iframe') {
+      push @{$g_page_info{iframes}}, $g_page_info{cur_iframe};
+      $g_page_info{cur_iframe} = undef;
     }
 
 } #_}
