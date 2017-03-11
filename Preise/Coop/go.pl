@@ -4,7 +4,10 @@ use strict;
 use LWP::Simple;
 use JSON;
 use HTML::Parser;
+use Tree::Create::DepthFirst;
 binmode(STDOUT, ':utf8');
+
+my $first_cur;
 
 my $top_dir     = "$ENV{digitales_backup}crawler/Preise/Coop/";
 my $wgetted_dir = "${top_dir}wgetted/";
@@ -17,6 +20,13 @@ my @top_level_categories = determine_top_level_categories();
 for my $category (@top_level_categories) { #_{
 #  printf "%-70s %20s\n", $category->{name}, $category->{href};
    do_menu(link_to_last_part($category->{href}), $category);
+
+   print $category->{name}, '  ', link_to_last_part($category->{href}), "\n";
+   $category->{tree}->traverse(sub {
+     my $node = shift;
+     print(("  " x $node->getDepth()) .  $node->getNodeValue() -> {name} . "  " . $node->getNodeValue() -> {href}.  "\n");
+   });
+
 } #_}
 
 # for my $category (@categories) { #_{
@@ -31,25 +41,25 @@ for my $category (@top_level_categories) { #_{
 # 
 # } #_}
 
-print_categories_recursively(\@top_level_categories, 0);
+#print_categories_recursively(\@top_level_categories, 0);
 
-sub print_categories_recursively {
-  my $categories = shift;
-  my $indent     = shift;
-
-  for my $category (reverse @$categories) {
-    print "  " x $indent;
-    print $category -> {name} // 'n/a';
-    print "\n";
-
-    if (exists $category->{categories}) {
-      print_categories_recursively($category->{categories}, $indent+1);
-    }
-
-  }
-
-
-}
+# sub print_categories_recursively { #_{
+#   my $categories = shift;
+#   my $indent     = shift;
+# 
+#   for my $category (reverse @$categories) {
+# #   print "  " x $indent;
+# #   print $category -> {name} // 'n/a';
+# #   print "\n";
+# 
+# #   if (exists $category->{categories}) {
+# #     print_categories_recursively($category->{categories}, $indent+1);
+# #   }
+# 
+#   }
+# 
+# 
+# } #_}
 
 sub determine_top_level_categories { #_{
 
@@ -78,7 +88,6 @@ sub determine_top_level_categories { #_{
       push @categories, {name=>$1, href=>$category_link};
 
 #     $categories{$1}{link} = $category_link;
-
 
       $next_is_category_name = 0;
       next;
@@ -131,17 +140,16 @@ sub do_category { #_{
 
 sub do_menu { #_{
 
-  my $last_part    = shift;
-  my $cur_category = shift;
+  my $last_part          = shift;
+  my $top_level_category = shift;
 
-  my @category_stack = ($cur_category);
+
+  my $tree_creator = Tree::Create::DepthFirst->new();
 
   my $in_a   = 0;
   my $href   = '';
 
-# $cur_category -> {foo} = 'foo';
 
-# print "do_menu, $last_part, $cur_category\n";
 
 
   download_menu_if_necessary($last_part);
@@ -157,42 +165,31 @@ sub do_menu { #_{
 
   my $content = $json->{subMenu};
 
+  my $depth = -1;
+  my $cur_category;
   my $parser = HTML::Parser->new(
     start_h       => [ sub { #_{
-      my ($tag, $attr) = @_;
-  
-      if ($tag eq 'ul') {
-#       $indent ++;
-        print "x\n";
-#       @{$category_stack[0]->{categories}} = [];
-        $cur_category -> {categories} = [];
-        unshift @category_stack, $cur_category;
 
-#       unshift @category_stack, {};
-      }
-      if ($tag eq 'li') {
-      }
-      if ($tag eq 'a') {
-        $in_a = 1;
-        $href = $attr->{href};
-#       $cat->{href} = $href;
-        $cur_category = {href=>$href};
-        push @category_stack, $cur_category;
-#       $category_stack[0]-->{href} = $href;
-      }
+      my ($tag, $attr) = @_;
+
+        if ($tag eq 'ul') {
+          $depth++ if $tag eq 'ul';
+        }
+  
+        if ($tag eq 'a') {
+          $in_a = 1;
+          $href = $attr->{href};
+          $cur_category = {href=>$href};
+        }
 
     },
       
     'tag, attr'],  #_}
     end_h         => [ sub { #_{
-      my ($tag, $text) = @_;
+      my $tag = shift;
     
       if ($tag eq '/ul') {
-        print "y\n";
-        shift @category_stack;
-#       $indent --;
-      }
-      if ($tag eq '/li') {
+        $depth--;
       }
       if ($tag eq '/a') {
         $in_a = 0;
@@ -201,27 +198,32 @@ sub do_menu { #_{
     },
     'tag'      ], #_}
     text_h        => [ sub { #_{
-      my ($text) = @_;
+      my $text = shift;
      
       if ($in_a) {
         $text =~ s/\n//g;
         $text =~ s/^\s+//g;
         $text =~ s/s+$//g;
-        $cur_category ->{text} = $text;
-#       ${$category_stack[0]}[-1]->{name}=$text;
-#       print "$text ($href)\n";
+        if ($text =~ m/\w/) {
+
+          $first_cur = $cur_category unless $first_cur;
+
+         $cur_category ->{name} = $text;
+          $tree_creator -> addNode($depth, $cur_category);
+        }
       }
+
      },
      'text'     ], #_} 
-
   );
 
   $parser -> parse($content);
 
+  $top_level_category->{tree} = $tree_creator->getTree();
 
-  while ($content =~ m,<ul>(.*?)</ul>,) {
+# while ($content =~ m,<ul>(.*?)</ul>,) {
 
-  }
+# }
 
 # print join "\n", keys %{$json};
 
