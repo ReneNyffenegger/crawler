@@ -13,21 +13,67 @@ my $top_dir     = "$ENV{digitales_backup}crawler/Preise/Coop/";
 my $wgetted_dir = "${top_dir}wgetted/";
 die "directory $wgetted_dir missing" unless -d $wgetted_dir;
 
+my $product_tree = Tree::Simple->new('Products');
 my @top_level_categories = determine_top_level_categories();
 
 # my $indent = 0;
 
 for my $category (@top_level_categories) { #_{
 #  printf "%-70s %20s\n", $category->{name}, $category->{href};
-   do_menu(link_to_last_part($category->{href}), $category);
+   do_menu_of_top_level_category(link_to_last_part($category->{href}), $category);
 
-   print $category->{name}, '  ', link_to_last_part($category->{href}), "\n";
-   $category->{tree}->traverse(sub {
-     my $node = shift;
-     print(("  " x $node->getDepth()) .  $node->getNodeValue() -> {name} . "  " . $node->getNodeValue() -> {href}.  "\n");
-   });
+#  print $category->{name}, '  ', link_to_last_part($category->{href}), "\n";
+#  $category->{tree}->traverse(sub {
+#    my $node = shift;
+#    printf(        "  %-50s %s\n", '  ' x $node->getDepth() . $node->getNodeValue()->{name}, link_to_last_part($node->getNodeValue()->{href}));
+#  });
 
 } #_}
+#
+#  print $category->{name}, '  ', link_to_last_part($category->{href}), "\n";
+
+my $in_red_or_whitewine = 0;
+$product_tree->traverse(sub {
+     my $node = shift;
+#    return if $node->getDepth() == -0;
+#    printf("%-50s %s\n", '  ' x $node->getDepth() . $node->getNodeValue()->{name}, link_to_last_part($node->getNodeValue()->{href}));
+
+     my $name = $node->getNodeValue()->{name};
+     my $href = $node->getNodeValue()->{href};
+     printf("%-50s %s\n", '  ' x $node->getDepth() . $name, substr($href, 1,190) );
+
+     if ($node->getDepth() == 1) {
+
+       if ($name eq 'Rotwein' or $name eq 'Weisswein') {
+         $in_red_or_whitewine = 1;
+       }
+       else {
+         $in_red_or_whitewine = 0;
+       }
+
+     }
+     if ($node->isLeaf()) {
+
+#      print "$href\n";
+#      my ($menu_url, $local_file)=href_to_menu_url($href, 0); 
+
+       if (not $in_red_or_whitewine) {
+         do_product_details($href);
+#        print "                                                 " . $menu_url . "  " . $local_file . "\n";
+       }
+       else {
+         if ($name =~ /^Alle /) {
+           do_product_details($href);
+#          print "                                                 " . $menu_url . "  " . $local_file . "\n";
+         }
+       }
+
+#      download_link_if_necessary(
+
+#      print "  " .  . "\n";
+
+     }
+ });
 
 # for my $category (@categories) { #_{
 #    printf "%-70s %20s\n", $category->{name}, $category->{href};
@@ -60,6 +106,29 @@ for my $category (@top_level_categories) { #_{
 # 
 # 
 # } #_}
+
+sub do_product_details { #_{
+
+  my $href = shift;
+
+  my ($menu_link, $local_file)=href_to_menu_link($href, 0); 
+
+  download_link_if_necessary_with_specification_of_local_file($menu_link, $local_file);
+  unless (-e $local_file) {
+    print "! Could not download $menu_link to $local_file\n";
+    return;
+  }
+
+  my $json = file_to_json($local_file);
+
+# print "Number of pages: " . $json->{pagination}->{numberOfPages} . "\n";
+
+  for my $page_no (1 .. ($json->{pagination}->{numberOfPages}-1)) {
+    my ($menu_link, $local_file)=href_to_menu_link($href, $page_no); 
+    download_link_if_necessary_with_specification_of_local_file($menu_link, $local_file);
+  }
+
+} #_}
 
 sub determine_top_level_categories { #_{
 
@@ -101,56 +170,50 @@ sub determine_top_level_categories { #_{
 
 } #_}
 
-sub do_category { #_{
-  my $category = shift;
-  download_link_if_necessary($category->{href});
+# qq sub do_category { #_{
+# qq   my $category = shift;
+# qq   download_link_if_necessary($category->{href});
+# qq 
+# qq   my $file_last_part = link_to_last_part($category->{href});
+# qq 
+# qq # printf "%-78s %s\n", $category->{name}, $file_last_part;
+# qq # do_menu($file_last_part, $categories{$category});
+# qq 
+# qq   return;
+# qq 
+# qq   my $local_file = link_to_local_file($category->{link});
+# qq 
+# qq   open (my $file, '<:encoding(utf-8)', $local_file) or die;
+# qq 
+# qq   while (my $line = <$file>) { #_{
+# qq 
+# qq       if ($line =~ m,<li class="list__item"><a href="([^"]+)">([^<]+)</a></li>,) { #_{
+# qq 
+# qq         my $link        = $1;
+# qq         my $subcategory = $2;
+# qq 
+# qq         do_subcategory($category, $subcategory);
+# qq 
+# qq       } #_}
+# qq 
+# qq 
+# qq   } #_}
+# qq 
+# qq   close $file;
+# qq 
+# qq } #_}
 
-  my $file_last_part = link_to_last_part($category->{href});
-
-# printf "%-78s %s\n", $category->{name}, $file_last_part;
-# do_menu($file_last_part, $categories{$category});
-
-  return;
-
-  my $local_file = link_to_local_file($category->{link});
-
-  open (my $file, '<:encoding(utf-8)', $local_file) or die;
-
-  while (my $line = <$file>) { #_{
-
-      if ($line =~ m,<li class="list__item"><a href="([^"]+)">([^<]+)</a></li>,) {
-
-        my $link        = $1;
-        my $subcategory = $2;
-
-# QQ    $categories{$category}{subcategories}{$subcategory}{link} = $link;
-
-        do_subcategory($category, $subcategory);
-
-#       print "    $subcategory ($link)\n";
-
-      }
-
-
-  } #_}
-
-  close $file;
-
-} #_}
-
-sub do_menu { #_{
+sub do_menu_of_top_level_category { #_{
 
   my $last_part          = shift;
   my $top_level_category = shift;
 
-
   my $tree_creator = Tree::Create::DepthFirst->new();
+
+# $product_tree->addChild($top_level_category);
 
   my $in_a   = 0;
   my $href   = '';
-
-
-
 
   download_menu_if_necessary($last_part);
 
@@ -219,7 +282,12 @@ sub do_menu { #_{
 
   $parser -> parse($content);
 
-  $top_level_category->{tree} = $tree_creator->getTree();
+  my $tree = $tree_creator->getTree();
+# $tree->setNodeValue({name=>$top_level_category->{name}, href=>'TODO TODO'});
+  $tree->setNodeValue($top_level_category);
+# $product_tree->addChild($tree_creator->getTree());
+# $top_level_category->{tree} = $tree_creator->getTree();
+  $product_tree->addChild($tree)
 
 # while ($content =~ m,<ul>(.*?)</ul>,) {
 
@@ -313,17 +381,25 @@ sub download_link_if_necessary { #_{
 
 
   my $local_file = link_to_local_file($link);
-  my $url        = "http://coopathome.ch$link";
+# my $url        = "http://coopathome.ch$link";
+
+  download_link_if_necessary_with_specification_of_local_file($link, $local_file);
+
+} #_}
+
+sub download_link_if_necessary_with_specification_of_local_file {
+  my $link       = shift;
+  my $local_file = shift;
 
   return if -f $local_file;
 
+  my $url        = "http://coopathome.ch$link";
   print "Downloading $url to $local_file\n";
 
   getstore($url, $local_file) or die;
 
   system ("dos2unix $local_file");
-
-} #_}
+}
 
 sub last_part_to_local_menu_file { #_{
 
@@ -351,6 +427,34 @@ sub download_menu_if_necessary { #_{
 
 } #_}
 
+sub href_to_menu_link { #_{
+  my $href    = shift;
+  my $page_no = shift;
+
+  $href = substr($href, 3); # rm »de/«
+
+  $href =~ m,^(.*?)/([^/]+?)(?:\?(.+))?$,;
+
+  my $part_1 = $1;
+  my $part_2 = $2;
+  my $part_3 = $3;
+
+# my $link = "http://www.coopathome.ch$part_1/$part_2/results?page=$page_no";
+  my $link =                         "$part_1/$part_2/results?page=$page_no";
+  my $local_file = "${wgetted_dir}$part_2-result_$page_no";
+# my $link =                        "$part_1/results?page=$page_no";
+  if ($part_3) {
+    $link .= "&$part_3";
+    $local_file .= "-$part_3";
+  }
+  $local_file =~ s/%3A/+/g;
+
+# return $link;
+  return ($link, $local_file);
+
+
+} #_}
+
 sub link_to_last_part { #_{
   my $link = shift;
 
@@ -372,8 +476,16 @@ sub link_to_local_file { #_{
 
 } #_}
 
+sub file_to_json { #_{
 
+  my $local_file = shift;
 
+  open (my $h, '<:encoding(utf-8)', $local_file) or die;
+  my $json_txt = join "", <$h>;
+  close $h;
 
+  my $json = from_json($json_txt);
 
+  return $json;
 
+} #_}
