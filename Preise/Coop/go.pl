@@ -5,6 +5,8 @@ use LWP::Simple;
 use JSON;
 use HTML::Parser;
 use Tree::Create::DepthFirst;
+# use Tree::Simple::View::HTML;
+use utf8;
 binmode(STDOUT, ':utf8');
 
 my $first_cur;
@@ -16,59 +18,59 @@ die "directory $wgetted_dir missing" unless -d $wgetted_dir;
 my $product_tree = Tree::Simple->new('Products');
 my @top_level_categories = determine_top_level_categories();
 
-# my $indent = 0;
+open (my $out, '>:encoding(utf-8)', '../Coop.html') or die;
+  print $out "<html><head>
+    <meta http-equiv='Content-Type' content='text/html; charset=utf-8'>
+    <meta name='description' content='Preisliste Coop'>
+    <title>Preisliste Coop</title>
+
+    <style type='text/css'> 
+    </style>
+
+  </head><body>
+  <h1>Preisliste Coop</h1>
+  <pre><code>";
 
 for my $category (@top_level_categories) { #_{
-#  printf "%-70s %20s\n", $category->{name}, $category->{href};
    do_menu_of_top_level_category(link_to_last_part($category->{href}), $category);
-
-#  print $category->{name}, '  ', link_to_last_part($category->{href}), "\n";
-#  $category->{tree}->traverse(sub {
-#    my $node = shift;
-#    printf(        "  %-50s %s\n", '  ' x $node->getDepth() . $node->getNodeValue()->{name}, link_to_last_part($node->getNodeValue()->{href}));
-#  });
-
 } #_}
-#
-#  print $category->{name}, '  ', link_to_last_part($category->{href}), "\n";
 
 my $in_red_or_whitewine = 0;
 my $in_online_butcher   = 0;
 my $in_rezepte          = 0;
-$product_tree->traverse(sub {
+$product_tree->traverse(sub { #_{
      my $node = shift;
-#    return if $node->getDepth() == -0;
-#    printf("%-50s %s\n", '  ' x $node->getDepth() . $node->getNodeValue()->{name}, link_to_last_part($node->getNodeValue()->{href}));
 
      my $name = $node->getNodeValue()->{name};
      my $href = $node->getNodeValue()->{href};
-     printf("%-50s %s\n", '  ' x $node->getDepth() . $name, substr($href, 1,190) );
+#    printf("%-50s %s\n", '  ' x $node->getDepth() . $name, substr($href, 1,190) );
+     printf $out ("%-50s\n"   , '  ' x $node->getDepth() . $name );
 
-     if ($node->getDepth() == 1) {
+     if ($node->getDepth() == 1) { #_{
 
-       if ($name eq 'Rotwein' or $name eq 'Weisswein') {
+       if ($name eq 'Rotwein' or $name eq 'Weisswein') { #_{
          $in_red_or_whitewine = 1;
          $in_online_butcher   = 0;
          $in_rezepte          = 0;
-       }
-       elsif ($name eq 'Ihr Online Metzger') {
+       } #_}
+       elsif ($name eq 'Ihr Online Metzger') { #_{
          $in_red_or_whitewine = 0;
          $in_online_butcher   = 1;
          $in_rezepte          = 0;
-       }
-       elsif ($name eq 'Rezepte') {
+       } #_}
+       elsif ($name eq 'Rezepte') { #_{
          $in_red_or_whitewine = 0;
          $in_online_butcher   = 0;
          $in_rezepte          = 1;
-       }
-       else {
+       } #_}
+       else { #_{
          $in_red_or_whitewine = 0;
          $in_online_butcher   = 0;
          $in_rezepte          = 0;
-       }
+       } #_}
 
-     }
-     if ($node->isLeaf()) {
+     } #_}
+     if ($node->isLeaf()) { #_{
 
 
        if (not $in_red_or_whitewine and not $in_online_butcher and not $in_rezepte) {
@@ -80,44 +82,13 @@ $product_tree->traverse(sub {
          }
        }
 
-#      download_link_if_necessary(
+     } #_}
+ }); #_}
 
-#      print "  " .  . "\n";
+print $out "</code></pre><body></html>";
+close $out;
 
-     }
- });
 
-# for my $category (@categories) { #_{
-#    printf "%-70s %20s\n", $category->{name}, $category->{href};
-# 
-# #  for my $key (keys %$category) {
-# #    print "  $key\n";
-# #  }
-# #  if ($category->{categories}) {
-# #    print "  yes\n";
-# #  }
-# 
-# } #_}
-
-#print_categories_recursively(\@top_level_categories, 0);
-
-# sub print_categories_recursively { #_{
-#   my $categories = shift;
-#   my $indent     = shift;
-# 
-#   for my $category (reverse @$categories) {
-# #   print "  " x $indent;
-# #   print $category -> {name} // 'n/a';
-# #   print "\n";
-# 
-# #   if (exists $category->{categories}) {
-# #     print_categories_recursively($category->{categories}, $indent+1);
-# #   }
-# 
-#   }
-# 
-# 
-# } #_}
 
 sub do_product_details { #_{
 
@@ -135,9 +106,227 @@ sub do_product_details { #_{
 
 # print "Number of pages: " . $json->{pagination}->{numberOfPages} . "\n";
 
-  for my $page_no (1 .. ($json->{pagination}->{numberOfPages}-1)) {
+  my $nof_pages = $json->{pagination}->{numberOfPages};
+
+  for my $page_no (1 .. $nof_pages -1) {
     my ($menu_link, $local_file)=href_to_menu_link($href, $page_no); 
     download_link_if_necessary_with_specification_of_local_file($menu_link, $local_file);
+  }
+
+  parse_prices_from_json($href, $nof_pages);
+
+} #_}
+
+sub parse_prices_from_json { #_{
+
+  my $href      = shift;
+  my $nof_pages = shift;
+
+  for my $page_no  ( 0 .. $nof_pages-1) {
+    my ($dummy_menu_link, $local_file)=href_to_menu_link($href, $page_no); 
+
+    die unless -e $local_file;
+
+
+    my $in_h2=0;
+    my $in_a =0;
+    my $in_dt=0;
+    my $in_dd=0;
+    my $in_span_itemprop_value = 0;
+    my $current_article = '';
+    my $price = 0;
+    my $price_per_quantity = '';
+    my $price_instead = '';
+    my $rebate_from = '';
+    my $value       = '';
+
+    my $expect_dt_price          = 0;
+    my $expect_dt_price_quantity = 0;
+    my $expect_dt_price_instead  = 0;
+    my $expect_dd_price = 0;
+    my $expect_dd_price_quantity = 0;
+    my $quantity                 = 0;
+    
+    my $parser = HTML::Parser->new(
+      start_h       => [ sub { #_{
+
+        my ($tag, $attr) = @_;
+
+          if ($tag eq 'h2') { #_{
+             $in_h2 = 1;
+             $expect_dt_price_quantity = 0;
+             $expect_dd_price_quantity = 0;
+             $price_per_quantity = '';
+          } #_}
+          if ($tag eq 'a') { #_{
+             $in_a = 1;
+          } #_}
+          if ($tag eq 'dl') { #_{
+            die "attr class = $attr->{class}" unless $attr->{class} eq 'product-item__price';
+            $expect_dt_price = 1;
+          } #_}
+          if ($tag eq 'dt') { #_{
+             $in_dt = 1;
+
+             if ($attr->{class} eq 'product-item__price__label product-item__price__value--save') {
+               $expect_dt_price_instead = 1;
+             }
+             else {
+               $expect_dt_price_instead = 0;
+
+               if ($attr -> {class} eq 'product-item__price__label visuallyhidden') {
+                 unless ($expect_dt_price) {
+                   $expect_dd_price_quantity = 1;
+                 }
+               }
+               else{
+                 die;
+               }
+             }
+
+          } #_}
+          if ($tag eq 'dd') { #_{
+             $in_dd = 1;
+          } #_}
+          if ($tag eq 'span') { #_{
+            if ($attr->{itemprop} // '' eq 'value') {
+              $in_span_itemprop_value = 1;
+            }
+          } #_}
+
+
+      },
+        
+      'tag, attr'],  #_}
+      end_h         => [ sub { #_{
+        my $tag = shift;
+
+      
+        if ($tag eq '/h2') {
+           $in_h2 = 0;
+        }
+        if ($tag eq '/a') {
+           $in_a  = 0;
+        }
+        if ($tag eq '/dt') {
+           $in_dt  = 0;
+        }
+        if ($tag eq '/dd') {
+           $in_dd  = 0;
+        }
+        if ($tag eq '/span') {
+           $in_span_itemprop_value  = 0;
+        }
+      
+      },
+      'tag'      ], #_}
+      text_h        => [ sub { #_{
+        my $text = shift;
+
+        if ($in_h2 and $in_a) { #_{
+           $current_article = $text;
+           $price_instead   = '';
+           $rebate_from = '';
+           $value = '';
+        } #_}
+
+        if ($in_dt) { #_{
+
+          if ($expect_dt_price) {
+
+            die ">$text<" unless $text eq 'Preis';
+            $expect_dt_price = 0;
+            $expect_dd_price = 1;
+
+          }
+          elsif ($expect_dt_price_instead) {
+
+
+            if ($text =~ m,statt (\d+\.\d\d)$,) {
+              $price_instead = $price;
+              $price = $1;
+
+            }
+            elsif ($text =~ m,Rabatt ab (\d+)$,) {
+               $rebate_from = $1;
+            }
+            elsif ($text =~ m,Wert (\d+\.\d\d)$,) {
+               $value = $1;
+            }
+            else {
+              die ">$text<" unless $text =~ m,statt (\d+\.\d\d)$,;
+            }
+
+          }
+          elsif ($expect_dt_price_quantity) {
+            if ($text =~ m,Preis pro (.*)$,) {
+               $expect_dt_price_quantity = 1;
+            }
+            else {
+#             die ">$text<\n";;
+            }
+
+          }
+
+
+        } #_}
+        if ($in_dd) { #_{
+
+          if ($expect_dd_price) {
+            die ">$text<" unless $text =~ m/^\d+\.\d\d/;
+            $price = $text;
+            $expect_dd_price = 0;
+#           print "                      $current_article  $price\n";
+          }
+          elsif ($expect_dd_price_quantity) {
+
+            if ($text =~ m,(\d+\.\d\d/.*),) {
+
+              $price_per_quantity = $1;
+
+              my $line = sprintf "%25s %-85s", '', $current_article;
+
+              my $price = sprintf "%7.2f", $price;
+
+              if ($price_instead) {
+                 $line .= "<del>$price</del>";
+                 $line .= sprintf "  %7.2f ", $price_instead;
+              }
+              else {
+                 $line .= $price . "          ";
+              }
+              $line .= " " . $price_per_quantity;
+
+              print $out "$line\n";
+#             printf $out "                          %-85s   %7.2f  %s  %s\n", $current_article, $price, $price_instead, $price_per_quantity;
+
+#             print "$price_per_quantity\n";
+            }
+
+          }
+        } #_}
+
+        if ($in_span_itemprop_value) { #_{
+
+# print ">$text<\n";
+#         die ">$text<" unless $text =~ /(\d+)/;
+
+#         $quantity = $1;
+#         print $quantity, "\n";
+
+        } #_}
+
+
+       },
+       'text'     ], #_} 
+    );
+
+    my $json = file_to_json($local_file);
+    $parser -> parse($json->{productListerHTML});
+
+
+#   print $json->{productListerHTML};
+#   exit;
   }
 
 } #_}
@@ -154,7 +343,7 @@ sub determine_top_level_categories { #_{
 
   my $next_is_category_name = 0;
   my $category_link = '';
-  while (my $in = <$main>) {
+  while (my $in = <$main>) { #_{
 
     chomp $in;
 
@@ -172,7 +361,7 @@ sub determine_top_level_categories { #_{
 
       $next_is_category_name = 0;
       next;
-    }
+    } #_}
 
   }
 
@@ -221,8 +410,6 @@ sub do_menu_of_top_level_category { #_{
   my $top_level_category = shift;
 
   my $tree_creator = Tree::Create::DepthFirst->new();
-
-# $product_tree->addChild($top_level_category);
 
   my $in_a   = 0;
   my $href   = '';
@@ -295,17 +482,8 @@ sub do_menu_of_top_level_category { #_{
   $parser -> parse($content);
 
   my $tree = $tree_creator->getTree();
-# $tree->setNodeValue({name=>$top_level_category->{name}, href=>'TODO TODO'});
   $tree->setNodeValue($top_level_category);
-# $product_tree->addChild($tree_creator->getTree());
-# $top_level_category->{tree} = $tree_creator->getTree();
   $product_tree->addChild($tree)
-
-# while ($content =~ m,<ul>(.*?)</ul>,) {
-
-# }
-
-# print join "\n", keys %{$json};
 
 
 } #_}
@@ -347,59 +525,57 @@ sub do_menu_of_top_level_category { #_{
 # QQ 
 # QQ } #_}
 
-sub do_product { #_{
-  my $category    = shift;
-  my $subcategory = shift;
-  my $file        = shift;
-
-  my $in = <$file>;
-  chomp $in;
-
-  my $link;
-  my $product_name;
-  my $blood_red = '';
-
-  if ($in =~ m,<a href="([^"]+)" data-line-clamp="1:3" data-product-overlay>([^<]+)</a>,) {
-
-    $link = $1;
-    $product_name = $2;
-
-  }
-  elsif ($in =~ m,<a href="([^"]+)" data-line-clamp="1:3" data-product-overlay (data-modal-modifiers="theme--blood-red")?>,) {
-    $link = $1;
-
-    if ($2) {
-      $blood_red = "BLUTROT";
-    }
-
-    $in = <$file>;
-    chomp $in;
-
-    die $in unless $in =~ m,^\s*(\S.*)</a>,;
-     $product_name = $1;
-  }
-  else {
-    die $in;
-  }
-
-
-  printf "    %-74s %s\n", "$product_name $blood_red", $link;
-
-
-} #_}
+# QQ sub do_product { #_{
+# QQ   my $category    = shift;
+# QQ   my $subcategory = shift;
+# QQ   my $file        = shift;
+# QQ 
+# QQ   my $in = <$file>;
+# QQ   chomp $in;
+# QQ 
+# QQ   my $link;
+# QQ   my $product_name;
+# QQ   my $blood_red = '';
+# QQ 
+# QQ   if ($in =~ m,<a href="([^"]+)" data-line-clamp="1:3" data-product-overlay>([^<]+)</a>,) {
+# QQ 
+# QQ     $link = $1;
+# QQ     $product_name = $2;
+# QQ 
+# QQ   }
+# QQ   elsif ($in =~ m,<a href="([^"]+)" data-line-clamp="1:3" data-product-overlay (data-modal-modifiers="theme--blood-red")?>,) {
+# QQ     $link = $1;
+# QQ 
+# QQ     if ($2) {
+# QQ       $blood_red = "BLUTROT";
+# QQ     }
+# QQ 
+# QQ     $in = <$file>;
+# QQ     chomp $in;
+# QQ 
+# QQ     die $in unless $in =~ m,^\s*(\S.*)</a>,;
+# QQ      $product_name = $1;
+# QQ   }
+# QQ   else {
+# QQ     die $in;
+# QQ   }
+# QQ 
+# QQ 
+# QQ   printf "    %-74s %s\n", "$product_name $blood_red", $link;
+# QQ 
+# QQ 
+# QQ } #_}
 
 sub download_link_if_necessary { #_{
   my $link = shift;
 
-
   my $local_file = link_to_local_file($link);
-# my $url        = "http://coopathome.ch$link";
 
   download_link_if_necessary_with_specification_of_local_file($link, $local_file);
 
 } #_}
 
-sub download_link_if_necessary_with_specification_of_local_file {
+sub download_link_if_necessary_with_specification_of_local_file { #_{
   my $link       = shift;
   my $local_file = shift;
 
@@ -411,7 +587,7 @@ sub download_link_if_necessary_with_specification_of_local_file {
   getstore($url, $local_file) or die;
 
   system ("dos2unix $local_file");
-}
+} #_}
 
 sub last_part_to_local_menu_file { #_{
 
@@ -451,19 +627,15 @@ sub href_to_menu_link { #_{
   my $part_2 = $2;
   my $part_3 = $3;
 
-# my $link = "http://www.coopathome.ch$part_1/$part_2/results?page=$page_no";
-  my $link =                         "$part_1/$part_2/results?page=$page_no";
+  my $link       = "$part_1/$part_2/results?page=$page_no";
   my $local_file = "${wgetted_dir}$part_2-result_$page_no";
-# my $link =                        "$part_1/results?page=$page_no";
   if ($part_3) {
     $link .= "&$part_3";
     $local_file .= "-$part_3";
   }
   $local_file =~ s/%3A/+/g;
 
-# return $link;
   return ($link, $local_file);
-
 
 } #_}
 
