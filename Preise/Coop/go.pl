@@ -33,6 +33,8 @@ for my $category (@top_level_categories) { #_{
 #  print $category->{name}, '  ', link_to_last_part($category->{href}), "\n";
 
 my $in_red_or_whitewine = 0;
+my $in_online_butcher   = 0;
+my $in_rezepte          = 0;
 $product_tree->traverse(sub {
      my $node = shift;
 #    return if $node->getDepth() == -0;
@@ -46,25 +48,35 @@ $product_tree->traverse(sub {
 
        if ($name eq 'Rotwein' or $name eq 'Weisswein') {
          $in_red_or_whitewine = 1;
+         $in_online_butcher   = 0;
+         $in_rezepte          = 0;
+       }
+       elsif ($name eq 'Ihr Online Metzger') {
+         $in_red_or_whitewine = 0;
+         $in_online_butcher   = 1;
+         $in_rezepte          = 0;
+       }
+       elsif ($name eq 'Rezepte') {
+         $in_red_or_whitewine = 0;
+         $in_online_butcher   = 0;
+         $in_rezepte          = 1;
        }
        else {
          $in_red_or_whitewine = 0;
+         $in_online_butcher   = 0;
+         $in_rezepte          = 0;
        }
 
      }
      if ($node->isLeaf()) {
 
-#      print "$href\n";
-#      my ($menu_url, $local_file)=href_to_menu_url($href, 0); 
 
-       if (not $in_red_or_whitewine) {
+       if (not $in_red_or_whitewine and not $in_online_butcher and not $in_rezepte) {
          do_product_details($href);
-#        print "                                                 " . $menu_url . "  " . $local_file . "\n";
        }
        else {
          if ($name =~ /^Alle /) {
            do_product_details($href);
-#          print "                                                 " . $menu_url . "  " . $local_file . "\n";
          }
        }
 
