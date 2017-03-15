@@ -7,11 +7,13 @@ use HTML::Parser;
 use Text::Wrap;
 use URI;
 
+my $method = shift;
 my $url = shift;
 
 my $user_agent = LWP::UserAgent->new ( #_{
   timeout         =>  10,
-  agent           => 'TQ',
+# agent           => 'TQ',
+  agent           => 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:47.0) Gecko/20100101 Firefox/47.0',
   default_headers =>  HTTP::Headers->new('Accept-Language'  => 'de; en; *'),
   max_redirect    =>  0,
 ); #_}
@@ -30,7 +32,7 @@ $Text::Wrap::columns  = 120;
 $Text::Wrap::unexpand =   0;
 
 my $uri_ = URI->new($url) or die;
-page ($uri_->scheme, $uri_->host, $uri_->path);
+page ($method, $uri_->scheme, $uri_->host, $uri_->path);
 
 # topLevelDomain($host);
 
@@ -39,7 +41,7 @@ my %g_page_info;
 sub topLevelDomain { #_{
   my $scheme = shift;
   my $host   = shift;
-  page($scheme, $host, '/');
+  page('GET', $scheme, $host, '/');
 
 # whois($host);
 # robot_txt($host); 
@@ -119,6 +121,7 @@ sub matchUpToNLNL { #_{
 
 sub page { #_{
 
+  my $method = shift;
   my $scheme = shift;
   my $host   = shift;
   my $path   = shift;
@@ -128,19 +131,25 @@ sub page { #_{
   print "url = $url\n";
 
   my $http_response = $user_agent -> request(
-       HTTP::Request -> new (GET=>$url)
+       HTTP::Request -> new ($method=>$url)
   );
 
   my $content = $http_response->content;
 
   if ($http_response->code == 301) {
-    printf "Moved Permanently to %s\n", $http_response->header('Location');
+    printf "301 Moved Permanently to %s\n", $http_response->header('Location');
+    return;
+  }
+  if ($http_response->code == 302) {
+    printf "302 Found, got to %s\n", $http_response->header('Location');
     return;
   }
 
   show_http_headers($http_response->headers);
 
-# print "content: $content\n";
+  open (my $out, '>:encoding(utf-8)', '/tmp/crawler.html') or die;
+  print $out $content;
+  close $out;
 
   %g_page_info = (
      url => $url
@@ -178,8 +187,9 @@ sub page { #_{
 #    );
   } #_}
 
+  print "TODOs\n";
   for my $todo (@{$g_page_info{TODO}}) {
-    printf "TODO $todo\n";
+    printf "  $todo\n";
   }
 
 } #_}
@@ -198,7 +208,7 @@ sub robot_txt { #_{
 
 } #_}
 
-sub print_url {
+sub print_url { #_{
   my $dest = shift;
   my $text = shift;
 
@@ -210,13 +220,14 @@ sub print_url {
     $dest->{query } // '',
     $text           // 'n/a'
   );
-}
+} #_}
 
 sub show_http_headers { #_{
   my $http_headers = shift;
 
+  print "HTTP Headers\n";
   for my $header_field_name ($http_headers->header_field_names) {
-    printf "%-30s: %s\n", $header_field_name, $http_headers->header($header_field_name);
+    printf "  %-50s: %s\n", $header_field_name, $http_headers->header($header_field_name) // '?';
   }
 
 } #_}
