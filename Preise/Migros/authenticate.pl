@@ -23,6 +23,19 @@ $request->header('Cookie', 'leshop-tgt=sbbRzv54BJi0VVzU_C7pxvcC_mOdpOHAahZAlq0Iq
 my $response = $mech->request($request);
 show_http_headers_request_and_response($response);
 
+my $leshopch = $response->header('leshopch');
+
+print "leshopch: $leshopch";
+
+print "\n\n\n";
+
+$request = HTTP::Request->new('GET' => 'https://authentication.leshop.ch/authentication/public/v1/api/validate');
+$request->header('Cookie', 'leshop-tgt=sbbRzv54BJi0VVzU_C7pxvcC_mOdpOHAahZAlq0IqNjQd9KW_9X_tV9evvHi1bLwxn-GUmnwj-S_oWvTbvaGHZP4uRubW5OKcAdPjC-FlBsK9QqYHwpkEjKbyhHbPHfs|MTQ4OTc3NjU0MQ|U0gxQVMxMjhDQkM|ITYBA8l1vLwot_jDO4k6Jw|TJcXFJSzFRF9t9QiqkhOrkKPDys; _ga=GA1.2.861690656.1489776516; leshop-routing=a; GEAR=local-582086d16b0c5a68b10000fd');
+$request->header('leshopch', $leshopch);
+$response = $mech->request($request);
+show_http_headers_request_and_response($response);
+
+
 sub show_http_headers_request_and_response { #_{
   my $response = shift;
 
@@ -47,5 +60,7 @@ sub show_http_headers_request_and_response { #_{
   &$f($response->request);
   print "  Response\n";
   &$f($response);
+
+  print $request->decoded_content;
 
 } #_}
