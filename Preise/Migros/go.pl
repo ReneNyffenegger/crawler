@@ -55,14 +55,7 @@ my $cookie =
 
 
 
-do_request('GET', 'https://catalog.leshop.ch/catalog/public/v1/api/compatibility/lightCategories?language=de', 'catalog.json');
-
-# do_request('GET', 'https://catalog.leshop.ch/catalog/public/v1/api/compatibility/categories/35961?language=de', 'cat-35961');
-
-
-
-# XXXXX:
-
+do_request('GET', 'https://catalog.leshop.ch/catalog/public/v1/api/compatibility/lightCategories?language=de', 'catalog.json', 0);
 my $json = read_wgetted_json_file('catalog.json') or die;
 
 my $tree = build_catalog_tree($json);
@@ -72,7 +65,6 @@ my $le_shop_tree;
 for my $cat ($tree->getAllChildren()) {
 # print $cat->getNodeValue()->{name}, "\n";
   if ($cat->getNodeValue()->{name} eq 'Le Shop') {
-#   print "yep\n";
     $le_shop_tree = $cat->clone();
     last;
   }
@@ -101,16 +93,16 @@ $le_shop_tree->traverse(sub { #_{ Download price and catalog items
   if ($node->isLeaf()) { #_{
     my $v = $node->getNodeValue();
     my $cat=$v->{id};
-    do_request('GET', "https://catalog.leshop.ch/catalog/public/v1/api/compatibility/categories/$cat?language=de", "cat-$cat");
+    do_request('GET', "https://catalog.leshop.ch/catalog/public/v1/api/compatibility/categories/$cat?language=de", "cat-$cat", 0);
 
     my $json_cat = read_wgetted_json_file("cat-$cat");
 
     for my $prod_id (keys %{$json_cat->{$cat}->{productsUndeliverabilities}}) {
 
-      do_request('GET', "https://catalog.leshop.ch/catalog/public/v1/api/compatibility/products/$prod_id?language=de&shortVersion=true", "prod-$prod_id");
-      do_request('GET', "https://catalog.leshop.ch/catalog/public/v1/api/compatibility/prices/$prod_id/warehouses/2", "prod-$prod_id-price");
+      do_request('GET', "https://catalog.leshop.ch/catalog/public/v1/api/compatibility/products/$prod_id?language=de&shortVersion=true", "prod-$prod_id", 0);
+      do_request('GET', "https://catalog.leshop.ch/catalog/public/v1/api/compatibility/prices/$prod_id/warehouses/2", "prod-$prod_id-price", 0);
 
-      my $json_prod        = read_wgetted_json_file("prod-$prod_id"      )->{$prod_id};
+      my $json_prod        = read_wgetted_json_file("prod-$prod_id")->{$prod_id};
       my $json_prod_price  = read_wgetted_json_file("prod-$prod_id-price")->{$prod_id};
 
       $node -> generateChild(
@@ -230,6 +222,7 @@ sub do_request { #_{
   my $url          = shift;
 # my $request      = shift;
   my $wgetted_file = shift;
+  my $try_count    = shift;
 
   my $archive_file = "$ENV{digitales_backup}crawler/Preise/Migros/wgetted/$wgetted_file";
   return if -f $archive_file;
@@ -238,11 +231,25 @@ sub do_request { #_{
 
   my $request = HTTP::Request->new($method, $url);
   $request -> header('leshopch', $leshopch_token);
-  $request -> header('Cookie'  , );
+  $request -> header('Cookie'  , $cookie);
 
   my $response = $mech->request($request);
 # show_http_headers_request_and_response($response);
 
+
+  if ($response->decoded_content =~ m/leshop-error/) {
+     print "Le shop error, try_count = $try_count\n";
+
+     if ($try_count == 0) {
+       print "re-authenticating\n";
+       authenticate();
+
+       do_request($method, $url, $wgetted_file, 1);
+       return;
+
+     }
+     die "try_count = $try_count";
+  }
   open (my $out, '>:encoding(utf-8)', $archive_file) or die;
   print $out decode("utf-8", $response->decoded_content);
   close $out;
@@ -282,9 +289,9 @@ sub show_http_headers_request_and_response { #_{
 } #_}
 
 sub read_wgetted_json_file { #_{
-  my $filename = shift;
+  my $filename  = shift;
   my $archived_file = "$ENV{digitales_backup}crawler/Preise/Migros/wgetted/$filename";
-  open (my $in, '<:encoding(utf-8)', $archived_file) or die;
+  open (my $in, '<:encoding(utf-8)', $archived_file) or die "$!\n$archived_file";
   my $json_text = join '', <$in>;
   close $in;
 
@@ -297,13 +304,22 @@ sub read_wgetted_json_file { #_{
      die "$archived_file seemed not to be a JSON file";
   }
 
-  if (exists $json->{'leshop-error'}) {
+  if (exists $json->{'leshop-error'}) { #_{
 
-    system "cat $archived_file";
 
-    unlink $archived_file;
-    die "leshop-error for $archived_file\n";
-  }
+#   if ($try_count == 0) {
+
+#      unlink $archived_file;
+#      authenticate();
+#      read_wgetted_json_file($filename, 1);
+
+#   }
+#   else {
+      system "cat $archived_file";
+      unlink $archived_file;
+      die "leshop-error for $archived_file";
+#   }
+  } #_}
 
   return $json;
   
@@ -357,5 +373,17 @@ sub build_catalog_tree { #_{
 
   } #_}
   return $tree;
+
+} #_}
+
+sub authenticate { #_{
+
+  my $request  = HTTP::Request->new('POST' => 'https://authentication.leshop.ch/authentication/public/v1/api/tickets/token');
+  $request->header('Cookie', $cookie);
+  my $response = $mech->request($request);
+# show_http_headers_request_and_response($response);
+  $leshopch_token = $response->header('leshopch');
+
+  print "Authenticate, new leshopch_token = $leshopch_token\n";
 
 } #_}
