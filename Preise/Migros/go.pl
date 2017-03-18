@@ -141,7 +141,7 @@ open (my $out, '>:encoding(utf-8)', '../Migros.html') or die; #_{
     </style>
 
   </head><body>
-  <h1>Preisliste Coop</h1>";
+  <h1>Preisliste Migros</h1>";
   print $out "<pre><code>"
   ; #_}
 
