@@ -3,7 +3,7 @@ use utf8;
 use Encode;
 binmode(STDOUT, ":utf8");
 
-my $print_ids = 1;
+my $print_ids = 0;
 
 #
 #   https://catalog.leshop.ch/catalog/public/v1/api/compatibility/categories/35961,29154?language=de
@@ -169,10 +169,18 @@ $le_shop_tree->traverse(sub { #_{
        $price = sprintf "    %7.2f", $v->{price}{est}
      }
      else {
-       $price = sprintf("ca. %7.2f (%0.2f-%0.2f)", $v->{price}{est}, $v->{price}{min}, $v->{price}{max});
+       if ($v->{price}{est} != 0) {
+         $price = sprintf("ca. %7.2f (%0.2f-%0.2f)", $v->{price}{est}, $v->{price}{min}, $v->{price}{max});
+       }
+       else {
+         $price = "";
+       }
      }
 
      $v->{price}{unit} = 'St.' if $v->{price}{unit} eq 'piece';
+
+     $v->{name} =~ s/^\s*//;
+     $v->{name} =~ s/\s*$//;
 
 #    printf $out "%-120s | %2d Stück: %7.2f %7.2f %7.2f (%1s) | %7.2f/%-5s | %-5s $id",
      printf $out "%-120s | <span class='st'>%2i Stück:</span> %-26s | %7.2f/%-5s $id",
