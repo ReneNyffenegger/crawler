@@ -31,7 +31,7 @@ my $html_parser = HTML::Parser->new( #_{
 $Text::Wrap::columns  = 120;
 $Text::Wrap::unexpand =   0;
 
-my $uri_ = URI->new($url) or die;
+my $uri_ = URI->new($url) or die "No uri_ from $url\n";
 page ($method, $uri_->scheme, $uri_->host, $uri_->path);
 
 # topLevelDomain($host);
@@ -248,18 +248,24 @@ sub hp_text { #_{
     else {
 
       if ($text =~ /(\w+str(?:asse|\.))\s+(\w*\d\w*)/) {
-        print "Strasse: $1 $2\n";
+        print "Strasse:    $1 $2\n";
+      }
+      if ($text =~ s/(CH\d\d( \d{4}){4} \d)//) {
+         print "IBAN:      $1\n";
       }
       if ($text =~ /\b(\d\d\d\d)\s+(\w+)/) {
-        if ($text !~ /([Ss]eit|[vV]on|[Cc]opyright) \d\d\d\d/) { 
-          print "Ort: $text\n";
+        if ($text !~ /([Ss]eit|[vV]on|[Cc]opyright|Jahr|\(c\)) (\d\d\d\d)/) { 
+          my $plz = $1;
+          if ($text !~ /(Jan|Feb|Mär|Apr|Mai|Jun|Jul|Aug|Sep|Okt|Nov|Dez)\w+ $plz/) {
+            print "Ort:      $text\n";
+          }
         }
       }
       if ($text =~ /\b(\d\d\d \d\d\d \d\d \d\d)/) {
-        print "Tel: $1\n";
+        print "Tel:       $1\n";
       }
       if ($text =~ /(\+\d\d \d\d \d\d\d \d\d \d\d)/) {
-        print "Tel: $1\n";
+        print "Tel:       $1\n";
       }
       if ($text =~ /(\S+\@\S+\.\S+)/) {
         print "Email: $1\n";
