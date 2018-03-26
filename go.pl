@@ -15,7 +15,8 @@ my $user_agent = LWP::UserAgent->new ( #_{
 # agent           => 'TQ',
   agent           => 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:47.0) Gecko/20100101 Firefox/47.0',
   default_headers =>  HTTP::Headers->new('Accept-Language'  => 'de; en; *'),
-  max_redirect    =>  0,
+# default_headers =>  HTTP::Headers->new('Accept-Language'  => 'en; de; *'),
+  max_redirect    =>  1,
 ); #_}
 
 my $html_parser = HTML::Parser->new( #_{
@@ -212,12 +213,13 @@ sub print_url { #_{
   my $dest = shift;
   my $text = shift;
 
-  printf("  %-5s %-30s %4d %-50s %-50s %s\n", 
+  printf("  %-5s %-30s %4d %-50s %-50s %-20s %s\n", 
     $dest->{scheme} // 'n/a',
     $dest->{host  } // 'n/a', 
     $dest->{port  } //    0 , 
     $dest->{path  } // 'n/a', 
     $dest->{query } // '',
+    $dest->{fragment} // '',   # the part after a # (the anchor)
     $text           // 'n/a'
   );
 } #_}
@@ -227,7 +229,7 @@ sub show_http_headers { #_{
 
   print "HTTP Headers\n";
   for my $header_field_name ($http_headers->header_field_names) {
-    printf "  %-50s: %s\n", $header_field_name, $http_headers->header($header_field_name) // '?';
+    printf "  %-50s: %s\n", $header_field_name, wrap('', '                 ', $http_headers->header($header_field_name) // '?');
   }
 
 } #_}
@@ -325,7 +327,10 @@ sub hp_start_tag { #_{
     } #_}
     elsif ($tag eq 'a'     ) { #_{
 
+
       my $dest = URI->new_abs($attr->{href}, $g_page_info{url});
+
+      print "! a $attr->{href} -> $dest\n";
 
       my $dest_uri = URI->new($dest);
 
@@ -343,11 +348,12 @@ sub hp_start_tag { #_{
 
         $g_page_info{cur_a} = {# dest=>$dest,
                                dest => {
-                                 scheme => $scheme,
-                                 host   => $dest_uri->host  ,
-                                 port   => $dest_uri->port  ,
-                                 path   => $dest_uri->path  ,
-                                 query  => $dest_uri->query 
+                                 scheme   => $scheme,
+                                 host     => $dest_uri->host  ,
+                                 port     => $dest_uri->port  ,
+                                 path     => $dest_uri->path  ,
+                                 query    => $dest_uri->query ,
+                                 fragment => $dest_uri->fragment   # the part after a # (the anchor)
                                },
                                text=>''};
       }
@@ -373,13 +379,14 @@ sub hp_start_tag { #_{
 
         $g_page_info{cur_iframe} = {
                                dest => {
-                                 scheme => $scheme,
-                                 host   => $dest_uri->host  ,
-                                 port   => $dest_uri->port  ,
-                                 path   => $dest_uri->path  ,
-                                 query  => $dest_uri->query 
-                               },
-                               text=>''};
+                               scheme => $scheme,
+                               host   => $dest_uri->host  ,
+                               port   => $dest_uri->port  ,
+                               path   => $dest_uri->path  ,
+                               query  => $dest_uri->query ,
+                               fragment => $dest_uri->fragment   # the part after a # (the anchor)
+                             },
+                             text=>''};
       }
 
     } #_}
